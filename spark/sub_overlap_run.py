@@ -5,6 +5,8 @@ from sub_overlap_pipeline import *
 def run_pipeline():
     """Run all the steps in the pipeline in sequence"""
 
+    # TODO: Add time measurements for each part of the code, and save results
+
     # Step 1: Start spark session and load data
     spark_session = start_session()
     df_raw = load_data("sample_data.json", spark_session)
@@ -29,4 +31,9 @@ def run_pipeline():
     # Step 7: Remove duplicates from data
     df_result = remove_duplicates(df_tuple_counts)
 
+    # TODO: Dump result dataframe into csv and put in folder on VM
     return df_result
+
+
+if __name__ == "__main__":
+    run_pipeline()
