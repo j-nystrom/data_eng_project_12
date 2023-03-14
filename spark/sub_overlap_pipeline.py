@@ -11,14 +11,15 @@ def start_session():
     Connect to spark cluster using private IP of spark master node
 
     Args:
-        - ip: private ip of the spark master node
+        - ip: private IP of the spark master node
         - max_cores: max number of cores to utilize on each worker node
         - app_name: name of the application
 
     Returns:
-        - spark_session:
+        - spark_session: spark session object used to load data in next step
     """
 
+    # TODO: Update code to connect to real cluster (this runs locally)
     spark_session = SparkSession.builder.appName("test_3").getOrCreate()
 
     return spark_session
@@ -33,9 +34,11 @@ def load_data(path, spark_session):
         - spark_session: the spark session object initiated in the previous step
 
     Returns:
-        - df_raw:
+        - df_raw: dataframe with one reddit comment per row; each column represents
+            some attribute of the comment. see GitHub readme for details
     """
 
+    # TODO: Update code to read data from HDFS
     df_raw = spark_session.read.options(multiline=False, header=True).json(path)
 
     return df_raw
@@ -45,14 +48,17 @@ def filter_columns(df_raw):
     """
     Filter to only keep columns that will be relevant for the analysis, in order
     to reduce the size of the dataframe
+
+    Args:
+        - df_raw: dataframe with one reddit comment per row
+
+    Returns:
+        - df_reddit: dataframe with the most relevant columns kept
     """
 
     # Define which columns should be kept
     cols_to_keep = [
         "author",
-        "body",
-        "created_utc",
-        "score",
         "subreddit",
         "subreddit_id",
     ]
@@ -69,11 +75,11 @@ def filter_top_subreddits(df_reddit, subs_to_incl):
     to only include these subreddits.
 
     Args:
-        - df_reddit: dataframe containing all data
+        - df_reddit: dataframe containing relevant data for analysis
         - subs_to_incl: number of subreddits that should be included in top list
 
     Returns:
-        - df_sub_filtered:
+        - df_sub_filtered: dataframe filtered to contain only the largest subreddits
     """
 
     # Groupby subreddit and count how many posts there are in each
@@ -81,6 +87,7 @@ def filter_top_subreddits(df_reddit, subs_to_incl):
 
     # Transform to pandas dataframe for easy slicing by index (this is a small df)
     # Take the top X rows and convert them to list
+    # TODO: Check if this can be done without using pandas (only pyspark)
     df_count_pd = df_subred_count.toPandas()
 
     df_top_subs = df_count_pd.sort_values(by="count", ascending=False).iloc[
@@ -99,11 +106,12 @@ def filter_top_users(df_sub_filtered, comment_threshold):
     Create a list of all users who have made a significant amount of reddit comments.
 
     Args:
-        - df_sub_filtered:
-        - comment_threshold:
+        - df_sub_filtered: dataframe filtered to contain only the largest subreddits
+        - comment_threshold: min number of comments a user has posted in order to be
+            included in the analysis
 
     Returns:
-        - df_user_filtered:
+        - df_user_filtered: dataframe filtered for top subreddits and top users
     """
 
     # Groupby author and count how many posts each user has made
@@ -121,13 +129,16 @@ def filter_top_users(df_sub_filtered, comment_threshold):
 
 def create_user_subreddit_tuples(df_user_filtered):
     """
-    Create a column with all combinations of overlapping subreddits a user has posted in.
+    Create column with all combinations of overlapping subreddits a user has posted in.
 
     Args:
-        - df_user_filtered:
+        - df_user_filtered: dataframe filtered for top subreddits and top users
 
     Returns:
-        - df_user_subs:
+        - df_user_subs: dataframe with two columns, one containing the user (author)
+            and the other tuples of combinations of subreddits the user has posted in,
+            e.g. (politics, CFB) and (politics, hockey)
+
     """
 
     # Create a column that contains a list of all subreddit a user has posted in
@@ -161,13 +172,15 @@ def create_user_subreddit_tuples(df_user_filtered):
 
 def count_tuples(df_user_subs):
     """
-    Count the occurrences of each tuple pair.
+    Count the occurrences of each tuple pair. Each user having posted in some
+    combination of two subreddits, e.g. (politics, hockey), will add 1 to thie count.
 
     Args:
-        -
+        - df_user_subs: dataframe with authors and their subreddit tuples
 
     Returns:
-        -
+        - df_tuple_counts: dataframe that is grouped by each subreddit tuple,
+            containing the number of times it occurs
     """
 
     # Explode the tuples into individual rows
@@ -186,10 +199,11 @@ def remove_duplicates(df_tuple_counts):
         - (AskReddit, AskReddit) is not relevant for the overlap analysis
 
     Args:
-        - df_tuple_counts:
+        - df_tuple_counts: dataframe with occurences of each subreddit tuple
 
     Returns:
-        - df_result:
+        - df_result: clean dataframe without duplicates and tuples where both elements
+            are identical
     """
 
     # Keep only rows where tuple elements are not identical
