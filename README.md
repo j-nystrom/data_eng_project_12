@@ -8,6 +8,32 @@ Group 12: Jacob Henningsson, Stefanos Tsampanakis, Sarath Peringayi Suresh, Rabi
 
 ## 2. Data
 
+The analysis will be conducted on an archive of Reddit data available from [here](http://files.pushshift.io/reddit/comments/).
+The data covers Reddit comments from December 2005 until January 2023, at the time of writing.
+It's stored as compressed `json` files (in `.zst` format). Each Reddit comment has the
+following schema / keys:
+
+* author: Username of the author of the comment 
+* author_flair_css_class: 
+* author_flair_text:
+* body: The message body
+* can_gild: 
+* controversiality:
+* created_utc:
+* distinguished:
+* edited: If the comment has been edited (true / false)
+* gilded:
+* id:
+* is_submitter:
+* link_id:
+* parent_id:
+* permalink:
+* retrieved_on:
+* score:
+* stickied:
+* subreddit: Name of the subreddit (forum)
+* subreddit_id: Unique identifier of the subreddit
+
 ## 3. Project report
 
 ## 4. Developer guidelines and best practice
