@@ -20,8 +20,19 @@ def start_session():
     """
 
     # TODO: Update code to connect to real cluster (this runs locally)
-    spark_session = SparkSession.builder.appName("test_3").getOrCreate()
+    # spark_session = SparkSession.builder.appName("test_3").getOrCreate()
+    
+    spark_session = SparkSession.builder\
+        .master("spark://192.168.2.70:9870") \      # FIXME: Check IP?
+        .appName("DE Project")\
+        .config("spark.dynamicAllocation.enabled", True)\
+        .config("spark.dynamicAllocation.shuffleTracking.enabled",True)\
+        .config("spark.shuffle.service.enabled", True)\
+        .config("spark.dynamicAllocation.executorIdleTimeout","30s")\
+        .config("spark.cores.max", 4)\
+        .getOrCreate()
 
+	
     return spark_session
 
 
@@ -39,8 +50,9 @@ def load_data(path, spark_session):
     """
 
     # TODO: Update code to read data from HDFS
+    path = "hdfs://192.168.2.70:9000/path"         # FIXME: Check IP?
     df_raw = spark_session.read.options(multiline=False, header=True).json(path)
-
+	
     return df_raw
 
 
@@ -69,7 +81,7 @@ def filter_columns(df_raw):
     return df_reddit
 
 
-def filter_top_subreddits(df_reddit, subs_to_incl):
+def filter_top_subreddits(df_reddit, subs_to_incl):s
     """
     Create a list of the biggest subreddits by number of posts, then filter dataframe
     to only include these subreddits.
