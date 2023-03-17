@@ -6,7 +6,7 @@ from pyspark.sql.functions import col, collect_set, udf, explode, count
 from pyspark.sql.types import ArrayType, StringType, StructType, StructField
 
 
-def start_session():
+def start_session(master_address, app_name, max_cores):
     """
     Connect to spark cluster using private IP of spark master node
 
@@ -19,24 +19,26 @@ def start_session():
         - spark_session: spark session object used to load data in next step
     """
 
-    # TODO: Update code to connect to real cluster (this runs locally)
-    # spark_session = SparkSession.builder.appName("test_3").getOrCreate()
-    
-    spark_session = SparkSession.builder\
-        .master("spark://192.168.2.70:9870") \      # FIXME: Check IP?
-        .appName("DE Project")\
-        .config("spark.dynamicAllocation.enabled", True)\
-        .config("spark.dynamicAllocation.shuffleTracking.enabled",True)\
-        .config("spark.shuffle.service.enabled", True)\
-        .config("spark.dynamicAllocation.executorIdleTimeout","30s")\
-        .config("spark.cores.max", 4)\
-        .getOrCreate()
+    # Local spark connection for dev and testing
+    # TODO: Remove temp path
+    spark_session = SparkSession.builder.appName("test_3").getOrCreate()
 
-	
+    # Connection to project spark cluster
+    #spark_session = SparkSession.builder\
+        #.master(master_address)\
+        #.appName(app_name)\
+        #.config("spark.dynamicAllocation.enabled", True)\
+        #.config("spark.dynamicAllocation.shuffleTracking.enabled", True)\
+        #.config("spark.shuffle.service.enabled", True)\
+        #.config("spark.dynamicAllocation.executorIdleTimeout", "30s")\
+        #.config("spark.ui.showConsoleProgress", False)\
+        #.config("spark.cores.max", max_cores)\
+        #.getOrCreate()
+
     return spark_session
 
 
-def load_data(path, spark_session):
+def load_data(hdfs_path, spark_session):
     """
     Read json data and create dataframe. inferring headers from the data
 
@@ -49,10 +51,8 @@ def load_data(path, spark_session):
             some attribute of the comment. see GitHub readme for details
     """
 
-    # TODO: Update code to read data from HDFS
-    path = "hdfs://192.168.2.70:9000/path"         # FIXME: Check IP?
-    df_raw = spark_session.read.options(multiline=False, header=True).json(path)
-	
+    df_raw = spark_session.read.options(multiline=False, header=True).json(hdfs_path)
+
     return df_raw
 
 
@@ -81,7 +81,7 @@ def filter_columns(df_raw):
     return df_reddit
 
 
-def filter_top_subreddits(df_reddit, subs_to_incl):s
+def filter_top_subreddits(df_reddit, subs_to_incl):
     """
     Create a list of the biggest subreddits by number of posts, then filter dataframe
     to only include these subreddits.
@@ -244,8 +244,12 @@ def remove_duplicates(df_tuple_counts):
         result_no_dupes.append([sorted_tup, count])
 
     # Create dataframe from the cleaned list
-    df_result = pd.DataFrame(
+    df_no_dupes = pd.DataFrame(
         result_no_dupes, columns=["subreddits", "count"]
     ).sort_values(by=["count"], ascending=False)
 
-    return df_result
+    return df_no_dupes
+
+
+def join_count_data(df_subred_count, df_no_dupes):
+    pass
