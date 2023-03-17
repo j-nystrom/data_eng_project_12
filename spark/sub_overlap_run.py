@@ -4,7 +4,17 @@ import time
 
 from sub_overlap_pipeline import *
 
-
+def do_runtime_experiments():
+    """Code for testing performance of the code for different number of cores used."""
+​
+    # Set up input parameters and variables
+    subs_to_incl = 100
+    comment_threshold = 1
+    max_core_values = [1, 2, 4, 8, 16]
+​
+    # Run for loop with different number of cores
+    for max_cores in max_core_values:
+        run_pipeline(max_cores, subs_to_incl, comment_threshold)
 def run_pipeline():
     """Run all the steps in the pipeline in sequence"""
     times = {}
