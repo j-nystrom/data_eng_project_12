@@ -14,7 +14,7 @@ def do_runtime_experiments():
     for max_cores in max_core_values:
         run_pipeline(max_cores, subs_to_incl, comment_threshold)
 
-def run_pipeline():
+def run_pipeline(max_cores, subs_to_incl, comment_threshold):
     """Run all the steps in the pipeline in sequence"""
     times = {}
 
