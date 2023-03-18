@@ -251,5 +251,28 @@ def remove_duplicates(df_tuple_counts):
     return df_no_dupes
 
 
-def join_count_data(df_subred_count, df_no_dupes):
-    pass
+def join_count_data(spark_session, df_subred_count, df_no_dupes):
+    """Docstring to be added"""
+
+    # Create columns for each tuple element, and rename count column
+    df_result = spark_session.createDataFrame(df_no_dupes)
+    df_result = df_result.withColumn("tup_1", col("subreddits").getField("_1"))
+    df_result = df_result.withColumn("tup_2", col("subreddits").getField("_2"))
+    df_result = df_result.withColumnRenamed("count", "tuple_count")
+
+    # Join count data for the first tuple element
+    df_result_join = df_result.join(
+        df_subred_count, df_result.tup_1 == df_subred_count.subreddit, "left"
+    )
+    df_result_join = df_result_join.withColumnRenamed("count", "tup_1_count")
+
+    # Join count data for the second tuple element
+    df_result_join_2 = df_result_join.join(
+        df_subred_count,
+        df_result_join.tup_2 == df_subred_count.subreddit,
+        "left",
+    )
+
+    df_result_join_2 = df_result_join_2.withColumnRenamed("count", "tup_2_count")
+
+    return df_result_join_2
