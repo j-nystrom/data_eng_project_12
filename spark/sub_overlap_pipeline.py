@@ -3,7 +3,7 @@ import pandas as pd
 
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, collect_set, udf, explode, count
-from pyspark.sql.types import ArrayType, StringType, StructType, StructField
+from pyspark.sql.types import ArrayType, StringType, IntegerType, StructType, StructField
 
 
 def start_session(master_address, app_name, max_cores):
@@ -21,7 +21,9 @@ def start_session(master_address, app_name, max_cores):
 
     # Local spark connection for dev and testing
     # TODO: Remove temp path
-    spark_session = SparkSession.builder.appName("test_3").getOrCreate()
+    spark_session = SparkSession.builder.appName(app_name)\
+        .config("spark.cores.max", max_cores)\
+        .getOrCreate()
 
     # Connection to project spark cluster
     #spark_session = SparkSession.builder\
@@ -95,22 +97,18 @@ def filter_top_subreddits(df_reddit, subs_to_incl):
     """
 
     # Groupby subreddit and count how many posts there are in each
-    df_subred_count = df_reddit.groupBy("subreddit").count()
+    df_subred_count = (
+        df_reddit.groupBy("subreddit").count().sort("count", ascending=False)
+    )
 
-    # Transform to pandas dataframe for easy slicing by index (this is a small df)
     # Take the top X rows and convert them to list
-    # TODO: Check if this can be done without using pandas (only pyspark)
-    df_count_pd = df_subred_count.toPandas()
+    df_top_subs = df_subred_count.limit(subs_to_incl)
+    top_subs = df_top_subs.select("subreddit").rdd.flatMap(lambda x: x).collect()
 
-    df_top_subs = df_count_pd.sort_values(by="count", ascending=False).iloc[
-        0:subs_to_incl
-    ]
-    top_subs = df_top_subs["subreddit"].tolist()
-
-    # Filter the original dataframe
+    # Filter the original dataframe using the list
     df_sub_filtered = df_reddit.filter(col("subreddit").isin(top_subs))
 
-    return df_sub_filtered
+    return df_subred_count, df_sub_filtered
 
 
 def filter_top_users(df_sub_filtered, comment_threshold):
@@ -229,7 +227,6 @@ def remove_duplicates(df_tuple_counts):
     ).collect()
 
     # Filter out the duplicates (each second occurrence)
-    # TODO: Investigate if this can be made more efficient with PySpark
     result_no_dupes = []
     encountered_pairs = set()
     for lst in result_clean:
@@ -254,25 +251,26 @@ def remove_duplicates(df_tuple_counts):
 def join_count_data(spark_session, df_subred_count, df_no_dupes):
     """Docstring to be added"""
 
-    # Create columns for each tuple element, and rename count column
+    # Create spark dataframe from pandas df
     df_result = spark_session.createDataFrame(df_no_dupes)
+
+    # Create columns for each tuple element, and rename count column
     df_result = df_result.withColumn("tup_1", col("subreddits").getField("_1"))
     df_result = df_result.withColumn("tup_2", col("subreddits").getField("_2"))
     df_result = df_result.withColumnRenamed("count", "tuple_count")
 
     # Join count data for the first tuple element
     df_result_join = df_result.join(
-        df_subred_count, df_result.tup_1 == df_subred_count.subreddit, "left"
-    )
+        df_subred_count, df_result.tup_1 == df_subred_count.subreddit
+    ).select(df_result["*"], df_subred_count["count"])
+
     df_result_join = df_result_join.withColumnRenamed("count", "tup_1_count")
 
     # Join count data for the second tuple element
-    df_result_join_2 = df_result_join.join(
-        df_subred_count,
-        df_result_join.tup_2 == df_subred_count.subreddit,
-        "left",
-    )
+    df_result_join = df_result_join.join(
+        df_subred_count, df_result_join.tup_2 == df_subred_count.subreddit
+    ).select(df_result_join["*"], df_subred_count["count"])
 
-    df_result_join_2 = df_result_join_2.withColumnRenamed("count", "tup_2_count")
+    df_result_join = df_result_join.withColumnRenamed("count", "tup_2_count")
 
-    return df_result_join_2
+    return df_result_join
