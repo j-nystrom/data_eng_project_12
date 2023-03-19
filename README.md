@@ -6,6 +6,8 @@ Group 12: Jacob Henningsson, Stefanos Tsampanakis, Sarath Peringayi Suresh, Rabi
 
 ## 1. Introduction
 
+The project aims at giving a first-hand experience of the challenges involved in approaching new data engineering problems while providing an opportunity to deepen the practical experience with some of the tools that have been introduced in the course. In this group project, we are supposed to architect and implement a horizontally scalable data processing solution for the chosen dataset. The scalability of the approach is demonstrated with computational experiments.
+
 ## 2. Data
 
 The analysis will be conducted on an archive of Reddit data available from [here](http://files.pushshift.io/reddit/comments/).
@@ -35,6 +37,8 @@ following schema / keys:
 * subreddit_id: Unique identifier of the subreddit
 
 ## 3. Project report
+
+The project report gives additional detail on the background, architecture, analysis and scalability experiments of the project. It can be found [here](https://www.overleaf.com/project/6403ced3312e8236e09bbcc9) (access required).
 
 ## 4. Developer guidelines and best practice
 
