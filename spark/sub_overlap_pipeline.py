@@ -19,23 +19,17 @@ def start_session(master_address, app_name, max_cores):
         - spark_session: spark session object used to load data in next step
     """
 
-    # Local spark connection for dev and testing
-    # TODO: Remove temp path
-    spark_session = SparkSession.builder.appName(app_name)\
+    # Connection to project spark cluster
+    spark_session = SparkSession.builder\
+        .master(master_address)\
+        .appName(app_name)\
+        .config("spark.dynamicAllocation.enabled", True)\
+        .config("spark.dynamicAllocation.shuffleTracking.enabled", True)\
+        .config("spark.shuffle.service.enabled", True)\
+        .config("spark.dynamicAllocation.executorIdleTimeout", "30s")\
+        .config("spark.ui.showConsoleProgress", False)\
         .config("spark.cores.max", max_cores)\
         .getOrCreate()
-
-    # Connection to project spark cluster
-    #spark_session = SparkSession.builder\
-        #.master(master_address)\
-        #.appName(app_name)\
-        #.config("spark.dynamicAllocation.enabled", True)\
-        #.config("spark.dynamicAllocation.shuffleTracking.enabled", True)\
-        #.config("spark.shuffle.service.enabled", True)\
-        #.config("spark.dynamicAllocation.executorIdleTimeout", "30s")\
-        #.config("spark.ui.showConsoleProgress", False)\
-        #.config("spark.cores.max", max_cores)\
-        #.getOrCreate()
 
     return spark_session
 
