@@ -3,7 +3,7 @@ import pandas as pd
 
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, collect_set, udf, explode, count
-from pyspark.sql.types import ArrayType, StringType, IntegerType, StructType, StructField
+from pyspark.sql.types import ArrayType, StringType, StructType, StructField
 
 
 def start_session(master_address, app_name, max_cores):
