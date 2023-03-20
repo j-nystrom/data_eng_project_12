@@ -52,13 +52,15 @@ def load_data(hdfs_path, spark_session):
     return df_raw
 
 
-def filter_columns(df_raw):
+def filter_columns_and_sample(df_raw, sample_fraction):
     """
     Filter to only keep columns that will be relevant for the analysis, in order
-    to reduce the size of the dataframe
+    to reduce the size of the dataframe. Take random sample with specified fraction
+    to facilitate scalability testing.
 
     Args:
         - df_raw: dataframe with one reddit comment per row
+        - sample_fraction: fraction of data to sample
 
     Returns:
         - df_reddit: dataframe with the most relevant columns kept
@@ -73,6 +75,9 @@ def filter_columns(df_raw):
 
     # Select those columns to create new dataframe
     df_reddit = df_raw.select([col for col in cols_to_keep])
+
+    # Sample the desired fraction
+    df_reddit = df_reddit.sample(fraction=sample_fraction)
 
     return df_reddit
 
