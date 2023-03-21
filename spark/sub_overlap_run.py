@@ -65,7 +65,3 @@ def run_pipeline(max_cores, subs_to_incl, comment_threshold, sample_fraction):
     times["join_count_data"] = round(end_time - start_time, 2)
 
     return df_result, times, spark_session
-
-
-if __name__ == "__main__":
-    run_pipeline()

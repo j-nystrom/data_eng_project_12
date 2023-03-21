@@ -1,6 +1,4 @@
 
-import pandas as pd
-
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, collect_set, udf, explode, count
 from pyspark.sql.types import ArrayType, StringType, StructType, StructField
@@ -188,10 +186,14 @@ def count_tuples(df_user_subs):
     """
 
     # Explode the tuples into individual rows
-    df_exploded = df_user_subs.select(explode("subreddit_tuples").alias("tuple_col"))
+    df_exploded = df_user_subs.select(
+        explode("subreddit_tuples").alias("subred_tuples")
+    )
 
     # Group by the exploded tuples and count the occurrences of each tuple
-    df_tuple_counts = df_exploded.groupBy("tuple_col").agg(count("*").alias("count"))
+    df_tuple_counts = df_exploded.groupBy("subred_tuples").agg(
+        count("*").alias("count")
+    )
 
     return df_tuple_counts
 
@@ -213,7 +215,10 @@ def remove_duplicates(df_tuple_counts):
 
     # Keep only rows where tuple elements are not identical
     df_counts_filtered = df_tuple_counts.filter(
-        ~(col("tuple_col").getField("tuple_1") == col("tuple_col").getField("tuple_2"))
+        ~(
+            col("subred_tuples").getField("tuple_1")
+            == col("subred_tuples").getField("tuple_2")
+        )
     )
 
     # Define custom schema for the sorted tuple column (to keep as is)
@@ -231,7 +236,7 @@ def remove_duplicates(df_tuple_counts):
     # Apply the UDF to sort the tuples
     tuple_udf = udf(lambda x: sorted_tuples(x), tuple_schema)
     df_sorted_tuples = df_counts_filtered.withColumn(
-        "tuple_col", tuple_udf(col("tuple_col"))
+        "subred_tuples", tuple_udf(col("subred_tuples"))
     )
 
     # Remove the duplicates to get a dataframe of half the lenght
@@ -254,8 +259,11 @@ def join_count_data(df_subred_count, df_no_dupes):
     """
 
     # Create columns for each tuple element, and rename count column
-    df_result = df_no_dupes.withColumn("tup_1", col("subreddits").getField("_1"))
-    df_result = df_result.withColumn("tup_2", col("subreddits").getField("_2"))
+    # Create columns for each tuple element, and rename count column
+    df_result = df_no_dupes.withColumn(
+        "tup_1", col("subred_tuples").getField("tuple_1")
+    )
+    df_result = df_result.withColumn("tup_2", col("subred_tuples").getField("tuple_2"))
     df_result = df_result.withColumnRenamed("count", "tuple_count")
 
     # Join count data for the first tuple element
