@@ -45,16 +45,19 @@ def do_runtime_experiments(option):
             for key in times.keys():
                 f.write(f"{key}: {times[key]} \n")
 
-    # Convert dataframe to pandas as write to csv did not work
-    df_result_out = df_result.toPandas()
-
     # Print output example
     print("Displaying first rows of the output file \n")
-    print(df_result_out.head())
+    print("PySpark version \n")
+    print(df_result.show(20))
+
+    # Convert dataframe to pandas as write to csv did not work
+    df_result_out = df_result.toPandas()
+    print("Pandas version \n")
+    print(df_result_out.head(20))
 
     # Save output dataframe as csv
-    output_file = f"output.csv"
-    df_result_out.to_csv(f"{directory}{output_file}")
+    output_file = f"output.parquet"
+    df_result_out.to_parquet(f"{directory}{output_file}")
 
     # Close connection to spark cluster
     spark_session.stop()

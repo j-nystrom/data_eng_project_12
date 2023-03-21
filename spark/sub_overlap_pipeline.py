@@ -259,7 +259,6 @@ def join_count_data(df_subred_count, df_no_dupes):
     """
 
     # Create columns for each tuple element, and rename count column
-    # Create columns for each tuple element, and rename count column
     df_result = df_no_dupes.withColumn(
         "tup_1", col("subred_tuples").getField("tuple_1")
     )
