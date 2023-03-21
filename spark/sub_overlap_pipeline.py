@@ -23,11 +23,6 @@ def start_session(master_address, app_name, max_cores):
     spark_session = SparkSession.builder\
         .master(master_address)\
         .appName(app_name)\
-        .config("spark.dynamicAllocation.enabled", True)\
-        .config("spark.dynamicAllocation.shuffleTracking.enabled", True)\
-        .config("spark.shuffle.service.enabled", True)\
-        .config("spark.dynamicAllocation.executorIdleTimeout", "30s")\
-        .config("spark.ui.showConsoleProgress", False)\
         .config("spark.cores.max", max_cores)\
         .getOrCreate()
 
@@ -201,14 +196,15 @@ def count_tuples(df_user_subs):
     return df_tuple_counts
 
 
-def remove_duplicates(spark_session, df_tuple_counts):
+def remove_duplicates(df_tuple_counts):
     """
     Clean the data by removing duplicates and tuples where both elements are the same:
         - (politics, CFB) and (CFB, politics) should not be double counted
         - (AskReddit, AskReddit) is not relevant for the overlap analysis
 
     Args:
-        - df_tuple_counts: dataframe with occurences of each subreddit tuple (with duplicates)
+        - df_tuple_counts: dataframe with occurences of each subreddit tuple
+            (with duplicates)
 
     Returns:
         - df_result: clean dataframe without duplicates and tuples where both elements
@@ -244,14 +240,21 @@ def remove_duplicates(spark_session, df_tuple_counts):
     return df_no_dupes
 
 
-def join_count_data(spark_session, df_subred_count, df_no_dupes):
-    """Docstring to be added"""
+def join_count_data(df_subred_count, df_no_dupes):
+    """
+    Join the comment count of each individual subreddit to the dataframe with tuple
+    counts, to have all data in one place.
 
-    # Create spark dataframe from pandas df
-    df_result = spark_session.createDataFrame(df_no_dupes)
+    Args:
+        df_subred_count: dataframe with comment counts for each subreddit
+        df_no_dupes: de-duplicated dataframe with counts for each pair of subreddits
+
+    Returns:
+        df_result_join: dataframe combining data from the two input dataframes
+    """
 
     # Create columns for each tuple element, and rename count column
-    df_result = df_result.withColumn("tup_1", col("subreddits").getField("_1"))
+    df_result = df_no_dupes.withColumn("tup_1", col("subreddits").getField("_1"))
     df_result = df_result.withColumn("tup_2", col("subreddits").getField("_2"))
     df_result = df_result.withColumnRenamed("count", "tuple_count")
 

@@ -1,63 +1,16 @@
 
-import os
 import time
 
 from sub_overlap_pipeline import *
-
-
-def do_runtime_experiments():
-    """Code for testing performance of the code for different number of cores used."""
-
-    # Create directory for saving output
-    directory = f"data/{time.strftime('%Y-%m-%d %H:%M')}/"
-    os.makedirs(directory, exist_ok=True)
-
-    # Set up input parameters and variables
-    sample_fraction = 1
-    subs_to_incl = 100
-    comment_threshold = 1
-    max_core_values = [1, 2]  # [1, 2, 4, 8, 16]
-
-    # Run for loop with different number of cores
-    for max_cores in max_core_values:
-        df_result, times, spark_session = run_pipeline(
-            max_cores, subs_to_incl, comment_threshold, sample_fraction
-        )
-
-        print(f"Printing runtimes from run with [{max_cores}] cores (in seconds): \n")
-        print(f"{times} \n")
-
-        # Save computation time for this max core setting in csv file
-        timing_file = f"timing_cores_{max_cores}.csv"
-        with open(f"{directory}{timing_file}", "w") as f:
-            for key in times.keys():
-                f.write(f"{key}: {times[key]} \n")
-
-    # Convert dataframe to pandas as write to csv did not work
-    df_result_out = df_result.toPandas()
-
-    # Print output example
-    print("Displaying first rows of the output file \n")
-    print(df_result_out.head())
-
-    # Save output dataframe as csv
-    output_file = f"output.csv"
-    df_result_out.to_csv(f"{directory}{output_file}")
-
-    # Close connection to spark cluster
-    spark_session.stop()
-
-    # Return the output dataframe
-    return df_result_out
 
 
 def run_pipeline(max_cores, subs_to_incl, comment_threshold, sample_fraction):
     """Run all the steps in the pipeline in sequence"""
 
     # Spark cluster and HDFS settings
-    master_address = "spark://192.168.2.70:9870"
+    master_address = "spark://spark-master:7077"
     app_name = "group_12_app"
-    hdfs_path = "hdfs://192.168.2.70:9000/path"
+    hdfs_path = "hdfs://spark-master:9000/user/root/RC_2009-04.json"
 
     # Dictionary for saving runtime
     times = {}
@@ -107,7 +60,7 @@ def run_pipeline(max_cores, subs_to_incl, comment_threshold, sample_fraction):
 
     # Step 8: Join dataframes with counts together
     start_time = time.perf_counter()
-    df_result = join_count_data(spark_session, df_subred_count, df_no_dupes)
+    df_result = join_count_data(df_subred_count, df_no_dupes)
     end_time = time.perf_counter()
     times["join_count_data"] = round(end_time - start_time, 2)
 
@@ -115,4 +68,4 @@ def run_pipeline(max_cores, subs_to_incl, comment_threshold, sample_fraction):
 
 
 if __name__ == "__main__":
-    do_runtime_experiments()
+    run_pipeline()
