@@ -74,10 +74,10 @@ def filter_columns_and_sample(df_raw, sample_fraction):
     ]
 
     # Select those columns to create new dataframe
-    df_reddit = df_raw.select([col for col in cols_to_keep])
+    df_reddit_full = df_raw.select([col for col in cols_to_keep])
 
     # Sample the desired fraction
-    df_reddit = df_reddit.sample(fraction=sample_fraction)
+    df_reddit = df_reddit_full.sample(fraction=sample_fraction)
 
     return df_reddit
 
@@ -201,14 +201,14 @@ def count_tuples(df_user_subs):
     return df_tuple_counts
 
 
-def remove_duplicates(df_tuple_counts):
+def remove_duplicates(spark_session, df_tuple_counts):
     """
     Clean the data by removing duplicates and tuples where both elements are the same:
         - (politics, CFB) and (CFB, politics) should not be double counted
         - (AskReddit, AskReddit) is not relevant for the overlap analysis
 
     Args:
-        - df_tuple_counts: dataframe with occurences of each subreddit tuple
+        - df_tuple_counts: dataframe with occurences of each subreddit tuple (with duplicates)
 
     Returns:
         - df_result: clean dataframe without duplicates and tuples where both elements
@@ -220,29 +220,26 @@ def remove_duplicates(df_tuple_counts):
         ~(col("tuple_col").getField("tuple_1") == col("tuple_col").getField("tuple_2"))
     )
 
-    # Create list using list comprehension
-    result_clean = df_counts_filtered.rdd.map(
-        lambda row: [(row[0][0], row[0][1]), row[1]]
-    ).collect()
+    # Define custom schema for the sorted tuple column (to keep as is)
+    tuple_schema = StructType(
+        [
+            StructField("tuple_1", StringType(), False),
+            StructField("tuple_2", StringType(), False),
+        ]
+    )
 
-    # Filter out the duplicates (each second occurrence)
-    result_no_dupes = []
-    encountered_pairs = set()
-    for lst in result_clean:
-        tup = lst[0]
-        count = lst[1]
-        sorted_tup = tuple(sorted(tup))
+    # Define UDF to sort the elements in each tuple
+    def sorted_tuples(tup):
+        return tuple(sorted(tup))
 
-        if sorted_tup in encountered_pairs:
-            continue
+    # Apply the UDF to sort the tuples
+    tuple_udf = udf(lambda x: sorted_tuples(x), tuple_schema)
+    df_sorted_tuples = df_counts_filtered.withColumn(
+        "tuple_col", tuple_udf(col("tuple_col"))
+    )
 
-        encountered_pairs.add(sorted_tup)
-        result_no_dupes.append([sorted_tup, count])
-
-    # Create dataframe from the cleaned list
-    df_no_dupes = pd.DataFrame(
-        result_no_dupes, columns=["subreddits", "count"]
-    ).sort_values(by=["count"], ascending=False)
+    # Remove the duplicates to get a dataframe of half the lenght
+    df_no_dupes = df_sorted_tuples.dropDuplicates()
 
     return df_no_dupes
 

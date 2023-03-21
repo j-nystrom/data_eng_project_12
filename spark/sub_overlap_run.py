@@ -13,6 +13,7 @@ def do_runtime_experiments():
     os.makedirs(directory, exist_ok=True)
 
     # Set up input parameters and variables
+    sample_fraction = 1
     subs_to_incl = 100
     comment_threshold = 1
     max_core_values = [1, 2]  # [1, 2, 4, 8, 16]
@@ -20,7 +21,7 @@ def do_runtime_experiments():
     # Run for loop with different number of cores
     for max_cores in max_core_values:
         df_result, times, spark_session = run_pipeline(
-            max_cores, subs_to_incl, comment_threshold,
+            max_cores, subs_to_incl, comment_threshold, sample_fraction
         )
 
         print(f"Printing runtimes from run with [{max_cores}] cores (in seconds): \n")
@@ -50,14 +51,13 @@ def do_runtime_experiments():
     return df_result_out
 
 
-def run_pipeline(max_cores, subs_to_incl, comment_threshold):
+def run_pipeline(max_cores, subs_to_incl, comment_threshold, sample_fraction):
     """Run all the steps in the pipeline in sequence"""
 
     # Spark cluster and HDFS settings
-    master_address = "spark://192.168.2.70:9870"  # TODO: Set the correct address
+    master_address = "spark://192.168.2.70:9870"
     app_name = "group_12_app"
-    hdfs_path = "sample_data.json"  # TODO: Remove temp path when HDFS solution in place
-    # hdfs_path = "hdfs://192.168.2.70:9000/path"
+    hdfs_path = "hdfs://192.168.2.70:9000/path"
 
     # Dictionary for saving runtime
     times = {}
@@ -71,7 +71,7 @@ def run_pipeline(max_cores, subs_to_incl, comment_threshold):
 
     # Step 2: Filter out columns that will not be used
     start_time = time.perf_counter()
-    df_reddit = filter_columns(df_raw)
+    df_reddit = filter_columns_and_sample(df_raw, sample_fraction)
     end_time = time.perf_counter()
     times["filter_columns"] = round(end_time - start_time, 2)
 
