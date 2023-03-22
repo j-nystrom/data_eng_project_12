@@ -1,12 +1,10 @@
 
-import pandas as pd
-
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, collect_set, udf, explode, count
 from pyspark.sql.types import ArrayType, StringType, StructType, StructField
 
 
-def start_session():
+def start_session(master_address, app_name, max_cores):
     """
     Connect to spark cluster using private IP of spark master node
 
@@ -19,24 +17,17 @@ def start_session():
         - spark_session: spark session object used to load data in next step
     """
 
-    # TODO: Update code to connect to real cluster (this runs locally)
-    # spark_session = SparkSession.builder.appName("test_3").getOrCreate()
-    
+    # Connection to project spark cluster
     spark_session = SparkSession.builder\
-        .master("spark://192.168.2.70:9870") \      # FIXME: Check IP?
-        .appName("DE Project")\
-        .config("spark.dynamicAllocation.enabled", True)\
-        .config("spark.dynamicAllocation.shuffleTracking.enabled",True)\
-        .config("spark.shuffle.service.enabled", True)\
-        .config("spark.dynamicAllocation.executorIdleTimeout","30s")\
-        .config("spark.cores.max", 4)\
+        .master(master_address)\
+        .appName(app_name)\
+        .config("spark.cores.max", max_cores)\
         .getOrCreate()
 
-	
     return spark_session
 
 
-def load_data(path, spark_session):
+def load_data(hdfs_path, spark_session):
     """
     Read json data and create dataframe. inferring headers from the data
 
@@ -49,20 +40,20 @@ def load_data(path, spark_session):
             some attribute of the comment. see GitHub readme for details
     """
 
-    # TODO: Update code to read data from HDFS
-    path = "hdfs://192.168.2.70:9000/path"         # FIXME: Check IP?
-    df_raw = spark_session.read.options(multiline=False, header=True).json(path)
-	
+    df_raw = spark_session.read.options(multiline=False, header=True).json(hdfs_path)
+
     return df_raw
 
 
-def filter_columns(df_raw):
+def filter_columns_and_sample(df_raw, sample_fraction):
     """
     Filter to only keep columns that will be relevant for the analysis, in order
-    to reduce the size of the dataframe
+    to reduce the size of the dataframe. Take random sample with specified fraction
+    to facilitate scalability testing.
 
     Args:
         - df_raw: dataframe with one reddit comment per row
+        - sample_fraction: fraction of data to sample
 
     Returns:
         - df_reddit: dataframe with the most relevant columns kept
@@ -76,12 +67,15 @@ def filter_columns(df_raw):
     ]
 
     # Select those columns to create new dataframe
-    df_reddit = df_raw.select([col for col in cols_to_keep])
+    df_reddit_full = df_raw.select([col for col in cols_to_keep])
+
+    # Sample the desired fraction
+    df_reddit = df_reddit_full.sample(fraction=sample_fraction)
 
     return df_reddit
 
 
-def filter_top_subreddits(df_reddit, subs_to_incl):s
+def filter_top_subreddits(df_reddit, subs_to_incl):
     """
     Create a list of the biggest subreddits by number of posts, then filter dataframe
     to only include these subreddits.
@@ -95,22 +89,18 @@ def filter_top_subreddits(df_reddit, subs_to_incl):s
     """
 
     # Groupby subreddit and count how many posts there are in each
-    df_subred_count = df_reddit.groupBy("subreddit").count()
+    df_subred_count = (
+        df_reddit.groupBy("subreddit").count().sort("count", ascending=False)
+    )
 
-    # Transform to pandas dataframe for easy slicing by index (this is a small df)
     # Take the top X rows and convert them to list
-    # TODO: Check if this can be done without using pandas (only pyspark)
-    df_count_pd = df_subred_count.toPandas()
+    df_top_subs = df_subred_count.limit(subs_to_incl)
+    top_subs = df_top_subs.select("subreddit").rdd.flatMap(lambda x: x).collect()
 
-    df_top_subs = df_count_pd.sort_values(by="count", ascending=False).iloc[
-        0:subs_to_incl
-    ]
-    top_subs = df_top_subs["subreddit"].tolist()
-
-    # Filter the original dataframe
+    # Filter the original dataframe using the list
     df_sub_filtered = df_reddit.filter(col("subreddit").isin(top_subs))
 
-    return df_sub_filtered
+    return df_subred_count, df_sub_filtered
 
 
 def filter_top_users(df_sub_filtered, comment_threshold):
@@ -196,10 +186,14 @@ def count_tuples(df_user_subs):
     """
 
     # Explode the tuples into individual rows
-    df_exploded = df_user_subs.select(explode("subreddit_tuples").alias("tuple_col"))
+    df_exploded = df_user_subs.select(
+        explode("subreddit_tuples").alias("subred_tuples")
+    )
 
     # Group by the exploded tuples and count the occurrences of each tuple
-    df_tuple_counts = df_exploded.groupBy("tuple_col").agg(count("*").alias("count"))
+    df_tuple_counts = df_exploded.groupBy("subred_tuples").agg(
+        count("*").alias("count")
+    )
 
     return df_tuple_counts
 
@@ -212,6 +206,7 @@ def remove_duplicates(df_tuple_counts):
 
     Args:
         - df_tuple_counts: dataframe with occurences of each subreddit tuple
+            (with duplicates)
 
     Returns:
         - df_result: clean dataframe without duplicates and tuples where both elements
@@ -220,32 +215,68 @@ def remove_duplicates(df_tuple_counts):
 
     # Keep only rows where tuple elements are not identical
     df_counts_filtered = df_tuple_counts.filter(
-        ~(col("tuple_col").getField("tuple_1") == col("tuple_col").getField("tuple_2"))
+        ~(
+            col("subred_tuples").getField("tuple_1")
+            == col("subred_tuples").getField("tuple_2")
+        )
     )
 
-    # Create list using list comprehension
-    result_clean = df_counts_filtered.rdd.map(
-        lambda row: [(row[0][0], row[0][1]), row[1]]
-    ).collect()
+    # Define custom schema for the sorted tuple column (to keep as is)
+    tuple_schema = StructType(
+        [
+            StructField("tuple_1", StringType(), False),
+            StructField("tuple_2", StringType(), False),
+        ]
+    )
 
-    # Filter out the duplicates (each second occurrence)
-    # TODO: Investigate if this can be made more efficient with PySpark
-    result_no_dupes = []
-    encountered_pairs = set()
-    for lst in result_clean:
-        tup = lst[0]
-        count = lst[1]
-        sorted_tup = tuple(sorted(tup))
+    # Define UDF to sort the elements in each tuple
+    def sorted_tuples(tup):
+        return tuple(sorted(tup))
 
-        if sorted_tup in encountered_pairs:
-            continue
+    # Apply the UDF to sort the tuples
+    tuple_udf = udf(lambda x: sorted_tuples(x), tuple_schema)
+    df_sorted_tuples = df_counts_filtered.withColumn(
+        "subred_tuples", tuple_udf(col("subred_tuples"))
+    )
 
-        encountered_pairs.add(sorted_tup)
-        result_no_dupes.append([sorted_tup, count])
+    # Remove the duplicates to get a dataframe of half the lenght
+    df_no_dupes = df_sorted_tuples.dropDuplicates()
 
-    # Create dataframe from the cleaned list
-    df_result = pd.DataFrame(
-        result_no_dupes, columns=["subreddits", "count"]
-    ).sort_values(by=["count"], ascending=False)
+    return df_no_dupes
 
-    return df_result
+
+def join_count_data(df_subred_count, df_no_dupes):
+    """
+    Join the comment count of each individual subreddit to the dataframe with tuple
+    counts, to have all data in one place.
+
+    Args:
+        df_subred_count: dataframe with comment counts for each subreddit
+        df_no_dupes: de-duplicated dataframe with counts for each pair of subreddits
+
+    Returns:
+        df_result_join: dataframe combining data from the two input dataframes
+    """
+
+    # Create columns for each tuple element, and rename count column
+    df_result = df_no_dupes.withColumn(
+        "tup_1", col("subred_tuples").getField("tuple_1")
+    )
+    df_result = df_result.withColumn("tup_2", col("subred_tuples").getField("tuple_2"))
+    df_result = df_result.withColumnRenamed("count", "tuple_count")
+
+    # Join count data for the first tuple element
+    df_result_join = df_result.join(
+        df_subred_count, df_result.tup_1 == df_subred_count.subreddit
+    ).select(df_result["*"], df_subred_count["count"])
+
+    df_result_join = df_result_join.withColumnRenamed("count", "tup_1_count")
+
+    # Join count data for the second tuple element
+    df_result_join = df_result_join.join(
+        df_subred_count, df_result_join.tup_2 == df_subred_count.subreddit
+    ).select(df_result_join["*"], df_subred_count["count"])
+
+    df_result_join = df_result_join.withColumnRenamed("count", "tup_2_count")
+
+    return df_result_join
