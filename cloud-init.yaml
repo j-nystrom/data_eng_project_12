@@ -13,7 +13,4 @@ runcmd:
   - echo echo JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64 | sudo tee -a /etc/environment
   - source /home/ubuntu/.bashrc
   - export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64/
-  - wget https://dlcdn.apache.org/hadoop/common/hadoop-3.3.4/hadoop-3.3.4.tar.gz -p
-    /home/ubuntu/
-  - tar -xf -p /home/ubuntu/hadoop-3.3.4.tar.gz -c /home/ubuntu/
   - pip3 install pandas notebook matplotlib pyspark==3.2.3

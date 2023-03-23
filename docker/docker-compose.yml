@@ -1,0 +1,65 @@
+version: "3.9"
+
+services:
+    #Pull the image the private repository using the local ip of the master.
+    spark-master:
+      image: 192.168.2.98:5000/masterswarm
+      hostname: spark-master
+      ports:
+            - "8080:8080"
+            - "9870:9870"
+            - "7077:7077"
+            - "8888:8888"
+      #Use the host network for building to install pip packages.
+      build:
+        context: .
+        network: host
+      command: /bin/bash -c "/usr/local/spark/sbin/start-master.sh & /usr/local/hadoop/bin/hdfs namenode -format && /usr/local/hadoop/bin/hdfs namenode"
+      networks:
+        - sparknet
+
+      deploy:
+        placement:
+          constraints:
+            - node.role == manager
+    spark-worker-1:
+      image: 192.168.2.98:5000/workerswarm
+      depends_on:
+              - spark-master
+      hostname: spark-worker-1
+      ports:
+        - "8081:8081"
+      build:
+        context: .
+        network: host
+      command: /bin/bash -c "/usr/local/spark/sbin/start-worker.sh spark://spark-master:7077 &  /usr/local/hadoop/bin/hdfs datanode"
+      deploy:
+        placement:
+          constraints:
+            - node.role == worker
+      networks:
+            - sparknet
+    spark-worker-2:
+      image: 192.168.2.98:5000/workerswarm
+      depends_on:
+            - spark-master
+      hostname: spark-worker-2
+      build:
+        context: .
+        network: host
+      command: /bin/bash -c "/usr/local/spark/sbin/start-worker.sh spark://spark-master:7077 & /usr/local/hadoop/bin/hdfs datanode"
+      deploy:
+        placement:
+          constraints:
+            - node.role == worker
+      networks:
+        - sparknet
+
+#Setup an overlay network for the stack with a modified MTU for Openstack.
+networks:
+  sparknet:
+    name: sparknet
+    driver: overlay
+    attachable: true
+    driver_opts:
+      com.docker.network.driver.mtu: 1450
