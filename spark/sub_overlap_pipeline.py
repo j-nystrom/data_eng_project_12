@@ -22,6 +22,7 @@ def start_session(master_address, app_name, max_cores):
         .master(master_address)\
         .appName(app_name)\
         .config("spark.cores.max", max_cores)\
+        .config("spark.executor.memory", "2G")\
         .getOrCreate()
 
     return spark_session
@@ -75,10 +76,9 @@ def filter_columns_and_sample(df_raw, sample_fraction):
     return df_reddit
 
 
-def filter_top_subreddits(df_reddit, subs_to_incl):
+def count_subreddits(df_reddit):
     """
-    Create a list of the biggest subreddits by number of posts, then filter dataframe
-    to only include these subreddits.
+    Create a list of the biggest subreddits by number of posts.
 
     Args:
         - df_reddit: dataframe containing relevant data for analysis
@@ -94,8 +94,8 @@ def filter_top_subreddits(df_reddit, subs_to_incl):
     )
 
     # Take the top X rows and convert them to list
-    df_top_subs = df_subred_count.limit(subs_to_incl)
-    top_subs = df_top_subs.select("subreddit").rdd.flatMap(lambda x: x).collect()
+    # df_top_subs = df_subred_count.limit(subs_to_incl)
+    top_subs = df_subred_count.select("subreddit").rdd.flatMap(lambda x: x).collect()
 
     # Filter the original dataframe using the list
     df_sub_filtered = df_reddit.filter(col("subreddit").isin(top_subs))
